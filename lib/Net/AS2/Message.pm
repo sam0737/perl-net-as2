@@ -64,7 +64,7 @@ sub _create_message
 
 =head2 Constructor
 
-=over4
+=over 4
 
 =item $msg = Net::AS2::Message->create_from_serialized_state($state)
 
@@ -104,7 +104,7 @@ sub create_from_serialized_state
 
 =head2 Methods
 
-=over4
+=over 4
 
 =item $msg->is_success
 

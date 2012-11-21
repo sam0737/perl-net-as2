@@ -781,9 +781,22 @@ sub _encode_as2_id {
 
 =back
 
+=head1 BUGS
+
+=over 4
+
+=item *
+
+A bug in L<Crypt::SMIME> will caused test to fail - specifically failed to add public key after decryption failure.
+I applied the fixes and fork it to L<github|https://github.com/sam0737/perl-crypt-smime>.
+
+=back
+
 =head1 SEE ALSO
 
 L<Net::AS2::FAQ>, L<Net::AS2::Message>, L<Net::AS2::MDN>, L<MIME::Entity>
+
+Source code is maintained here at L<https://github.com/sam0737/perl-net-as2>. Patches are welcome.
 
 =head1 COPYRIGHT AND LICENSE
 

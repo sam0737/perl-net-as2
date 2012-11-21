@@ -28,7 +28,7 @@ my $crlf = "\x0d\x0a";
 
 =head2 Constructor
 
-=over4
+=over 4
 
 =item $mdn = Net::AS2::MDN->create_success($message)
 
@@ -479,10 +479,11 @@ sub as_mime
     return $report_mime;
 }
 
+1;
+
 =back
 
 =head1 SEE ALSO
 
 L<Net::AS2>, L<MIME::Entity>
 
-1;
