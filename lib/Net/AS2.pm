@@ -94,13 +94,14 @@ use LWP::UserAgent;
 use HTTP::Request;
 use Digest::SHA1;
 use MIME::Base64;
+use MIME::Parser;
 use Encode;
 use MIME::Entity;
 use Sys::Hostname;
 
 my $crlf = "\x0d\x0a";
 
-our $VERSION = "0.01";
+our $VERSION = "0.01_01";
 
 =head2 Constructor
 
@@ -126,7 +127,7 @@ The AS2 name of the partner. This will be used in the AS2-To header.
 
 =item PartnerUrl
 
-i<Required>. 
+I<Required.> 
 The Url of partner where message would be sent to.
 
 =item MyKey
@@ -189,7 +190,7 @@ Also, if enabled, signed MDN would be requested.
 
 =item Mdn
 
-i<Optional.> 
+I<Optional.> 
 The preferred MDN method - C<sync> or C<async>. The default is C<sync>.
 
 =item MdnAsyncUrl
@@ -206,7 +207,7 @@ This is passed to LWP::UserAgent.
 
 =item UserAgent
 
-i<Optional.>
+I<Optional.>
 User Agent name used in HTTP communication.
 
 This is passed to LWP::UserAgent.
@@ -322,7 +323,7 @@ Content is the raw POST body of the request.
 This method always returns a C<Net::AS2::Message> object and never dies.
 The message could be successfully parsed, or contains corresponding error message.
 
-Check the C<$message->is_async> property and send the MDN accordingly. 
+Check the C<$message-E<gt>is_async> property and send the MDN accordingly. 
 
 If ASYNC MDN is requested, it should be sent after this HTTP request is returned
 or in another thread - some AS2 server might block otherwise, YMMV. How to handle
@@ -386,6 +387,8 @@ sub decode_message
 
     if ($self->{_smime_enc}->isEncrypted($merged_headers . $content))
     {
+        # OpenSSL (Crypt::SMIME) in Windows cannot handle binary content, 
+        # convert the data to base64
         $content = 
             "Content-Transfer-Encoding: base64$crlf" .
             $merged_headers .
@@ -450,7 +453,7 @@ This method always returns a C<Net::AS2::MDN> object and never dies.
 The MDN could be successfully parsed, or contains unparsable error details 
 if it is malformed, or signature could not be verified.
 
-C<$mdn->match_mic($content_mic)> should be called afterward with the 
+C<$mdn-E<gt>match_mic($content_mic)> should be called afterward with the 
 pre-calculated MIC from the outgoing message to verify the correctness 
 of the MIC.
 
@@ -503,7 +506,7 @@ sub decode_mdn
 Returns the headers and content to be sent in a HTTP response for a sync MDN.
 
 The MDN is usually created after an incoming message is received, with 
-C<Net::AS2::MDN->create_success> or C<Net::AS2::MDN->create_from_unsuccessful_message>.
+C<Net::AS2::MDN-E<gt>create_success> or C<Net::AS2::MDN-E<gt>create_from_unsuccessful_message>.
 
 The headers are in arrayref format in PSGI response format.
 The content is raw and ready to be sent.
@@ -546,7 +549,7 @@ sub prepare_sync_mdn
 Send an ASYNC MDN requested by partner. Returns a L<HTTP::Response>.
 
 The MDN is usually created after an incoming message is received, with 
-C<Net::AS2::MDN->create_success> or C<Net::AS2::MDN->create_from_unsuccessful_message>.
+C<Net::AS2::MDN-E<gt>create_success> or C<Net::AS2::MDN-E<gt>create_from_unsuccessful_message>.
 
 If message id is not specified, a random one will be generated.
 
@@ -604,10 +607,12 @@ Content type of the message should be supplied.
 
 =back
 
-In case of HTTP failure, the MDN object will be marked with C<$mdn->is_error>.
+In case of HTTP failure, the MDN object will be marked with C<$mdn-E<gt>is_error>.
 
 In case ASYNC MDN is expected, the MDN object returned will most likely be marked with
-C<$mdn->is_unparsable> and should be ignored.
+C<$mdn-E<gt>is_unparsable> and should be ignored. A misbehave AS2 server could returns
+a valid MDN even if async was requested - in this case the C<$mdn-E<gt>is_success> would 
+be true.
 
 =cut
 
@@ -744,8 +749,11 @@ sub _parse_mdn
 
     if ($self->{_smime_sign}->isSigned($content))
     {
+        # OpenSSL (Crypt::SMIME) in Windows cannot handle binary content, 
+        # convert signature part to base64
+        $content = _pkcs7_base64($content);
         $content = eval { $self->{_smime_sign}->check($content); };
-        return Net::AS2::MDN->create_unparsable_mdn('MDN signature failed verification')
+        return Net::AS2::MDN->create_unparsable_mdn('MDN signature failed verification: ' . $@)
             if $@;
     } else {
         return Net::AS2::MDN->create_unparsable_mdn('MDN is not signed')
@@ -775,6 +783,30 @@ sub _encode_as2_id {
     } else {
         return $as2_id;
     }
+}
+
+sub _pkcs7_base64
+{
+    my ($content) = @_;
+    my $parser = new MIME::Parser;
+
+    $parser->output_to_core(1);
+    $parser->tmp_to_core(1);
+    my $entity = $parser->parse_data($content);
+
+    if ($entity->parts == 2)
+    {
+        my $p = $entity->parts(1);
+        if (defined $p && $p->head &&
+            $p->head->get('Content-type') =~ m{^application/(x-)?pkcs7-signature($|;)} &&
+            ($p->head->get('Content-transfer-encoding') // '') ne 'base64'
+        ) {
+            $p->head->replace('Content-transfer-encoding', 'base64');
+            return $entity->stringify;
+        }
+    }
+
+    return $content;
 }
 
 1;
@@ -809,7 +841,7 @@ This is free software; you can redistribute it and/or modify it under the same t
 This module is not certificated by any AS2 body. This module generates MDN on behave of you.  
 When using this module, you must have reviewed and responsible for all the actions and in-actions caused by this module.
 
-More legal text follows:
+More legal jargon follows:
 
 BECAUSE THIS SOFTWARE IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY FOR THE SOFTWARE, TO THE EXTENT PERMITTED BY APPLICABLE LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES PROVIDE THE SOFTWARE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE SOFTWARE IS WITH YOU. SHOULD THE SOFTWARE PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING, REPAIR, OR CORRECTION.
 

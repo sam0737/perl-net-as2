@@ -380,7 +380,7 @@ The URL where the MDN was requested to sent to
 
 sub async_url { return (shift)->{async_url}; }
 
-=item $mdn->async_url
+=item $mdn->should_sign
 
 Returns true if the MDN was requested to be signed
 
