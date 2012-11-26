@@ -286,7 +286,7 @@ sub extract_headers
 package Mock::Net::AS2;
 use base 'Net::AS2';
 
-sub _create_useragent
+sub create_useragent
 {
     return new Mock::LWP::UserAgent;
 }

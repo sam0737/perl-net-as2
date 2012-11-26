@@ -23,7 +23,7 @@ Net::AS2 - AS2 Protocol implementation (RFC 4130) used in Electronic Data Exchan
     my $mdn = $as2->decode_mdn($headers, $body);
 
     ### Receiving Message and sending MDN
-    my $message = $as2->decode_messages($headers, $post_body);
+    my $message = $as2->decode_message($headers, $post_body);
 
     if ($message->is_success) {
         print $message->content;
@@ -518,7 +518,7 @@ For CGI, it should be sent like this:
     my $mh = '';
     for (my $i = 0; $i < scalar @{$headers}; $i += 2)
     {
-        $mh .= $headers->[$i] . ': ' . $headers->[$i+1] . $crlf;
+        $mh .= $headers->[$i] . ': ' . $headers->[$i+1] . "\x0d\x0a";
     }
 
     binmode(STDOUT);
@@ -578,7 +578,7 @@ sub send_async_mdn
     my $req = HTTP::Request->new(POST => $target_url, \@$headers);
     $req->content($payload);
 
-    my $ua = $self->_create_useragent;
+    my $ua = $self->create_useragent;
     my $resp = $ua->request($req);
 
     return $resp;
@@ -704,7 +704,21 @@ sub _send_preprocess
     return (\@header, $payload, $mic);
 }
 
-sub _create_useragent
+=back
+
+=head2 Test Hooks
+
+=over 4
+
+=item $as2->create_useragent()
+
+This should return a C<LWP::UserAgent> usable for handling HTTP request.
+
+This allows test code to monitor the HTTP request sending out.
+
+=cut
+
+sub create_useragent
 {
     my $self = shift;
     my $ua = new LWP::UserAgent(timeout => $self->{Timeout}, agent => $self->{UserAgent});
@@ -724,7 +738,7 @@ sub _send
 
     my $test = $req->as_string;
 
-    my $ua = $self->_create_useragent;
+    my $ua = $self->create_useragent;
     my $resp = $ua->request($req);
 
     my $mdn;
