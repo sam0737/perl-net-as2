@@ -14,6 +14,6 @@ WriteMakefile(
         'HTTP::Message' => 0,
         'Digest::SHA1' => 0,
         'MIME::Base64' => 0,
-        'MIME::tools' => 0,
+        'MIME::Tools' => 0,
     }
 );
